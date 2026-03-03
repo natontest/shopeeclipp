@@ -10,7 +10,6 @@ const { promisify } = require('util')
 const stream = require('stream')
 const pipeline = promisify(stream.pipeline)
 
-// Usa ffmpeg-static se não tiver ffmpeg no sistema
 ffmpeg.setFfmpegPath(ffmpegStatic)
 
 const app = express()
@@ -19,8 +18,6 @@ const PORT = process.env.PORT || 3000
 app.use(cors())
 app.use(express.json())
 app.use(express.static(path.join(__dirname, '../public')))
-
-// ── UTILITÁRIOS ──────────────────────────────────────────
 
 function isShopeeUrl(url) {
   try {
@@ -94,19 +91,16 @@ async function extractVideoUrl(pageUrl) {
   }
 }
 
-// ── LIMPEZA DE METADADOS ──────────────────────────────────
-// Edita os atoms MP4 diretamente para remover handler_name e encoder
 function cleanMetadata(inputPath, outputPath) {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .outputOptions([
-        '-map_metadata -1',      // Remove TODOS os metadados globais
-        '-map_chapters -1',      // Remove capítulos
-        '-fflags +bitexact',     // Modo determinístico sem timestamps
-        '-c:v copy',             // Copia vídeo sem reencoder (rápido)
-        '-c:a copy',             // Copia áudio sem reencoder (rápido)
-        '-movflags +faststart',  // Otimiza para streaming
-        // Limpa metadados das streams
+        '-map_metadata -1',
+        '-map_chapters -1',
+        '-fflags +bitexact',
+        '-c:v copy',
+        '-c:a copy',
+        '-movflags +faststart',
         '-metadata:s:v:0 handler_name=',
         '-metadata:s:v:0 vendor_id=',
         '-metadata:s:v:0 encoder=',
@@ -120,45 +114,31 @@ function cleanMetadata(inputPath, outputPath) {
   })
 }
 
-// ── ROTAS DA API ──────────────────────────────────────────
-
-// POST /api/process — extrai URL do vídeo
 app.post('/api/process', async (req, res) => {
   try {
     const { url } = req.body
-
     if (!url || !isShopeeUrl(url)) {
-      return res.status(400).json({ error: 'Link inválido. Use um link de vídeo da Shopee.' })
+      return res.status(400).json({ error: 'Link invalido. Use um link de video da Shopee.' })
     }
-
     const expandedUrl = await expandUrl(url)
     const videoUrl = await extractVideoUrl(expandedUrl)
-
     if (!videoUrl) {
-      return res.status(404).json({
-        error: 'Não foi possível extrair o vídeo. Tente com o link direto do vídeo no app da Shopee.'
-      })
+      return res.status(404).json({ error: 'Nao foi possivel extrair o video.' })
     }
-
     res.json({ videoUrl, success: true })
   } catch (err) {
     res.status(500).json({ error: 'Erro interno. Tente novamente.' })
   }
 })
 
-// GET /api/download — baixa, limpa metadados e entrega o arquivo
 app.get('/api/download', async (req, res) => {
   const { url } = req.query
-
-  if (!url) {
-    return res.status(400).json({ error: 'URL não fornecida' })
-  }
+  if (!url) return res.status(400).json({ error: 'URL nao fornecida' })
 
   let inputPath = null
   let outputPath = null
 
   try {
-    // 1. Baixa o vídeo original para arquivo temporário
     const tmpDir = os.tmpdir()
     const id = Date.now() + '_' + Math.random().toString(36).slice(2)
     inputPath = path.join(tmpDir, `input_${id}.mp4`)
@@ -171,15 +151,11 @@ app.get('/api/download', async (req, res) => {
       }
     })
 
-    if (!videoRes.ok) throw new Error('Falha ao baixar vídeo da Shopee')
+    if (!videoRes.ok) throw new Error('Falha ao baixar video')
 
-    // Salva temporariamente
     await pipeline(videoRes.body, fs.createWriteStream(inputPath))
-
-    // 2. Limpa os metadados com ffmpeg
     await cleanMetadata(inputPath, outputPath)
 
-    // 3. Envia o arquivo limpo
     const filename = `shopeeclip-${Date.now()}.mp4`
     res.setHeader('Content-Type', 'video/mp4')
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
@@ -187,22 +163,17 @@ app.get('/api/download', async (req, res) => {
 
     const readStream = fs.createReadStream(outputPath)
     readStream.pipe(res)
-
-    // Limpa arquivos temporários após envio
     readStream.on('end', () => {
       fs.unlink(inputPath, () => {})
       fs.unlink(outputPath, () => {})
     })
-
   } catch (err) {
-    // Limpa arquivos temporários em caso de erro
     if (inputPath) fs.unlink(inputPath, () => {})
     if (outputPath) fs.unlink(outputPath, () => {})
-    res.status(500).json({ error: 'Erro ao processar vídeo. Tente novamente.' })
+    res.status(500).json({ error: 'Erro ao processar video.' })
   }
 })
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', ffmpeg: ffmpegStatic })
 })
