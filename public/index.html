@@ -1,1 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShopeeClip - Baixar Vídeos</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      width: 90%;
+      max-width: 500px;
+      text-align: center;
+    }
+    .logo { font-size: 48px; margin-bottom: 10px; }
+    h1 { color: #ee4d2d; margin-bottom: 8px; font-size: 28px; }
+    p { color: #666; margin-bottom: 30px; font-size: 14px; }
+    input {
+      width: 100%;
+      padding: 14px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      outline: none;
+    }
+    input:focus { border-color: #ee4d2d; }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: #ee4d2d;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover { background: #d44426; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 8px;
+      display: none;
+      font-size: 14px;
+    }
+    .status.info { background: #e8f4fd; color: #1a73e8; display: block; }
+    .status.success { background: #e8f5e9; color: #2e7d32; display: block; }
+    .status.error { background: #fdecea; color: #c62828; display: block; }
+    .download-btn {
+      display: none;
+      margin-top: 16px;
+      padding: 14px;
+      background: #2e7d32;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      text-decoration: none;
+    }
+    .footer { margin-top: 30px; color: #aaa; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🎬</div>
+    <h1>ShopeeClip</h1>
+    <p>Baixe vídeos da Shopee sem marca d'água e sem metadados</p>
 
+    <input type="text" id="urlInput" placeholder="Cole o link do vídeo da Shopee aqui..." />
+    <button id="processBtn" onclick="processVideo()">Processar Vídeo</button>
+
+    <div class="status" id="status"></div>
+    <a class="download-btn" id="downloadBtn">⬇️ Baixar Vídeo Limpo</a>
+
+    <div class="footer">
+      Os metadados são removidos para melhor alcance no TikTok e Instagram
+    </div>
+  </div>
+
+  <script>
+    let videoUrl = null;
+
+    async function processVideo() {
+      const url = document.getElementById('urlInput').value.trim();
+      const btn = document.getElementById('processBtn');
+      const status = document.getElementById('status');
+      const downloadBtn = document.getElementById('downloadBtn');
+
+      if (!url) {
+        showStatus('Cole o link do vídeo da Shopee!', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Processando...';
+      downloadBtn.style.display = 'none';
+      showStatus('Extraindo vídeo...', 'info');
+
+      try {
+        const res = await fetch('/api/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showStatus(data.error || 'Erro ao processar.', 'error');
+        } else {
+          videoUrl = data.videoUrl;
+          showStatus('Vídeo encontrado! Clique para baixar.', 'success');
+          downloadBtn.style.display = 'block';
+          downloadBtn.href = '/api/download?url=' + encodeURIComponent(videoUrl);
+          downloadBtn.download = 'shopeeclip.mp4';
+        }
+      } catch (err) {
+        showStatus('Erro de conexão. Tente novamente.', 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Processar Vídeo';
+    }
+
+    function showStatus(msg, type) {
+      const status = document.getElementById('status');
+      status.textContent = msg;
+      status.className = 'status ' + type;
+    }
+  </script>
+</body>
+</html>
